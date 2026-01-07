@@ -79,13 +79,44 @@ function formatCLP(value) {
   return value.toLocaleString("es-CL", { style: "currency", currency: "CLP" });
 }
 
-function Header({ categories, onCategory, activeCategory, query, setQuery }) {
+/** ---- Carrito (demo) helpers ---- */
+function addItem(cart, product, qty = 1) {
+  const found = cart.find((i) => i.id === product.id);
+  if (found) {
+    return cart.map((i) => (i.id === product.id ? { ...i, qty: i.qty + qty } : i));
+  }
+  return [...cart, { id: product.id, title: product.title, price: product.price, image: product.image, qty }];
+}
+
+function setQty(cart, productId, qty) {
+  if (qty <= 0) return cart.filter((i) => i.id !== productId);
+  return cart.map((i) => (i.id === productId ? { ...i, qty } : i));
+}
+
+function countItems(cart) {
+  return cart.reduce((sum, i) => sum + i.qty, 0);
+}
+
+function totalCart(cart) {
+  return cart.reduce((sum, i) => sum + i.price * i.qty, 0);
+}
+
+/** ---- UI ---- */
+function Header({
+  categories,
+  onCategory,
+  activeCategory,
+  query,
+  setQuery,
+  cartCount,
+  onOpenCart,
+}) {
   return (
     <header className="header">
       <div className="topbar">
         <div className="container topbar__inner">
           <p className="topbar__text">
-            Demo visual (sin compra en línea aún). Diseño y estructura preliminar.
+            Demo visual (sin pago real aún). Carrito funcional de muestra.
           </p>
           <div className="topbar__links">
             <a href="#ayuda">Ayuda</a>
@@ -127,9 +158,14 @@ function Header({ categories, onCategory, activeCategory, query, setQuery }) {
               ♡
             </button>
 
-            <button className="iconBtn" type="button" title="Carrito (demo)">
+            <button
+              className="iconBtn"
+              type="button"
+              title="Carrito"
+              onClick={onOpenCart}
+            >
               🛒
-              <span className="badge">0</span>
+              <span className="badge">{cartCount}</span>
             </button>
           </div>
         </div>
@@ -147,8 +183,8 @@ function Hero() {
           <p className="kicker">Colección destacada</p>
           <h1>Diseño limpio con foco en productos e imágenes</h1>
           <p className="lead">
-            Esta demo es solo para mostrar look & feel: header, secciones, grillas y cards.
-            Luego se integra carrito real, panel admin y Webpay.
+            Esta demo muestra look & feel + carrito funcional. El pago (Webpay o Mercado Pago)
+            se integra en la siguiente etapa.
           </p>
           <div className="hero__cta">
             <button className="btn btn--primary" type="button">
@@ -197,13 +233,13 @@ function Collections({ items }) {
   );
 }
 
-function ProductGrid({ products, onQuickView }) {
+function ProductGrid({ products, onQuickView, onAdd }) {
   return (
     <section className="section section--tight">
       <div className="container">
         <div className="section__head">
           <h2>Productos</h2>
-          <p>Grilla responsiva. Vista rápida incluida como demo.</p>
+          <p>Grilla responsiva. Vista rápida y agregar al carrito (demo).</p>
         </div>
 
         <div className="grid">
@@ -221,7 +257,7 @@ function ProductGrid({ products, onQuickView }) {
                 <h3 className="card__title">{p.title}</h3>
                 <div className="card__row">
                   <span className="price">{formatCLP(p.price)}</span>
-                  <button className="miniBtn" type="button">
+                  <button className="miniBtn" type="button" onClick={() => onAdd(p)}>
                     Agregar
                   </button>
                 </div>
@@ -243,7 +279,7 @@ function Footer() {
             <span className="brand__mark">●</span> TIENDA DEMO
           </div>
           <p className="muted">
-            Demo visual. Próximo paso: catálogo real, carrito, Webpay y panel de administración.
+            Demo visual. Próximo paso: catálogo real, panel de administración y pagos.
           </p>
         </div>
 
@@ -265,7 +301,7 @@ function Footer() {
   );
 }
 
-function QuickViewModal({ product, onClose }) {
+function QuickViewModal({ product, onClose, onAdd }) {
   if (!product) return null;
   return (
     <div className="modal" role="dialog" aria-modal="true">
@@ -285,7 +321,7 @@ function QuickViewModal({ product, onClose }) {
             </p>
 
             <div className="modal__actions">
-              <button className="btn btn--primary" type="button">
+              <button className="btn btn--primary" type="button" onClick={() => onAdd(product)}>
                 Agregar al carrito
               </button>
               <button className="btn btn--ghost" onClick={onClose} type="button">
@@ -299,22 +335,109 @@ function QuickViewModal({ product, onClose }) {
   );
 }
 
+/** Drawer lateral del carrito */
+function CartDrawer({ open, onClose, cart, onInc, onDec, onRemove }) {
+  if (!open) return null;
+
+  const total = totalCart(cart);
+
+  return (
+    <div className="drawerWrap" role="dialog" aria-modal="true">
+      <div className="drawerBackdrop" onClick={onClose} />
+      <aside className="drawer">
+        <div className="drawer__head">
+          <h3>Carrito</h3>
+          <button className="drawer__close" onClick={onClose} type="button">
+            ✕
+          </button>
+        </div>
+
+        {cart.length === 0 ? (
+          <div className="drawer__empty">
+            <p className="muted">Tu carrito está vacío.</p>
+            <button className="btn btn--ghost" type="button" onClick={onClose}>
+              Seguir viendo productos
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="drawer__items">
+              {cart.map((it) => (
+                <div className="cartItem" key={it.id}>
+                  <img className="cartItem__img" src={it.image} alt={it.title} />
+                  <div className="cartItem__mid">
+                    <div className="cartItem__title">{it.title}</div>
+                    <div className="cartItem__meta">{formatCLP(it.price)}</div>
+
+                    <div className="qty">
+                      <button className="qty__btn" type="button" onClick={() => onDec(it.id)}>
+                        −
+                      </button>
+                      <span className="qty__num">{it.qty}</span>
+                      <button className="qty__btn" type="button" onClick={() => onInc(it.id)}>
+                        +
+                      </button>
+                      <button className="removeBtn" type="button" onClick={() => onRemove(it.id)}>
+                        Quitar
+                      </button>
+                    </div>
+                  </div>
+
+                  <div className="cartItem__right">{formatCLP(it.price * it.qty)}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="drawer__foot">
+              <div className="sumRow">
+                <span>Total</span>
+                <strong>{formatCLP(total)}</strong>
+              </div>
+
+              <button className="btn btn--primary btn--full" type="button" disabled>
+                Continuar al pago (demo)
+              </button>
+              <p className="drawer__note">
+                Nota: el pago real se habilita al integrar Webpay o Mercado Pago.
+              </p>
+            </div>
+          </>
+        )}
+      </aside>
+    </div>
+  );
+}
+
 export default function App() {
   const [activeCategory, setActiveCategory] = useState("Inicio");
   const [query, setQuery] = useState("");
   const [quick, setQuick] = useState(null);
 
+  // Carrito
+  const [cartOpen, setCartOpen] = useState(false);
+  const [cart, setCart] = useState([]);
+
+  const cartCount = useMemo(() => countItems(cart), [cart]);
+
+  const addToCart = (product) => {
+    setCart((prev) => addItem(prev, product, 1));
+    setCartOpen(true);
+  };
+  const inc = (id) => setCart((prev) => {
+    const item = prev.find((i) => i.id === id);
+    return item ? setQty(prev, id, item.qty + 1) : prev;
+  });
+  const dec = (id) => setCart((prev) => {
+    const item = prev.find((i) => i.id === id);
+    return item ? setQty(prev, id, item.qty - 1) : prev;
+  });
+  const remove = (id) => setCart((prev) => prev.filter((i) => i.id !== id));
+
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase();
-
     return PRODUCTS.filter((p) => {
       const matchQuery = !q || p.title.toLowerCase().includes(q);
-      const matchCat =
-        activeCategory === "Inicio" ||
-        activeCategory === "Novedades" ||
-        p.tag === activeCategory;
-
-      // En demo: Inicio = ver todo; Novedades = ver todo (solo para navegación visual)
+      const matchCat = activeCategory === "Inicio" || activeCategory === "Novedades" || p.tag === activeCategory;
       return matchQuery && matchCat;
     });
   }, [activeCategory, query]);
@@ -327,16 +450,35 @@ export default function App() {
         activeCategory={activeCategory}
         query={query}
         setQuery={setQuery}
+        cartCount={cartCount}
+        onOpenCart={() => setCartOpen(true)}
       />
 
       <main>
         <Hero />
         <Collections items={COLLECTIONS} />
-        <ProductGrid products={filtered} onQuickView={setQuick} />
+        <ProductGrid products={filtered} onQuickView={setQuick} onAdd={addToCart} />
       </main>
 
       <Footer />
-      <QuickViewModal product={quick} onClose={() => setQuick(null)} />
+
+      <QuickViewModal
+        product={quick}
+        onClose={() => setQuick(null)}
+        onAdd={(p) => {
+          addToCart(p);
+          setQuick(null);
+        }}
+      />
+
+      <CartDrawer
+        open={cartOpen}
+        onClose={() => setCartOpen(false)}
+        cart={cart}
+        onInc={inc}
+        onDec={dec}
+        onRemove={remove}
+      />
     </div>
   );
 }
